@@ -1,0 +1,46 @@
+# ── Base de datos ────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+fleet.db
+
+# ── Entorno virtual Python ───────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Caché de Python ──────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ── Variables de entorno (claves secretas) ───────────
+.env
+.env.local
+.env.production
+
+# ── Archivos temporales de Excel/upload ──────────────
+*.xlsx
+*.xls
+*.xlsm
+uploads/
+
+# ── Sistema operativo Windows ────────────────────────
+Thumbs.db
+desktop.ini
+
+# ── IDEs y editores ──────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+
+# ── Logs ─────────────────────────────────────────────
+*.log
+logs/
+
+# ── Distribución / build ─────────────────────────────
+dist/
+build/
+*.egg-info/
