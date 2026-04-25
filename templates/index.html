@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlotaOps — Gestión de Mantenimiento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0d12;
+  --surface: #111520;
+  --surface2: #161c2a;
+  --border: #1e2a3a;
+  --border2: #263244;
+  --text: #d4dde8;
+  --text-dim: #637080;
+  --accent: #1a8fa0;        /* azul petróleo */
+  --accent-glow: #1a8fa033;
+  --ok: #2ecc87;            /* verde menta */
+  --ok-bg: #2ecc8715;
+  --warn: #f0a034;          /* ámbar */
+  --warn-bg: #f0a03415;
+  --crit: #c0392b;          /* rojo tinto */
+  --crit-bg: #c0392b18;
+  --font-ui: 'Syne', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Scrollbar ──────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── Header ─────────────────────────────────────── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2rem;
+  height: 60px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+  backdrop-filter: blur(12px);
+}
+
+.logo {
+  font-size: 1.1rem; font-weight: 800; letter-spacing: 0.04em;
+  color: var(--accent);
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.logo span { color: var(--text); font-weight: 400; }
+
+nav { display: flex; gap: 1.5rem; }
+nav a {
+  color: var(--text-dim); text-decoration: none; font-size: 0.85rem;
+  font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 0.25rem 0;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+nav a:hover { color: var(--text); border-color: var(--accent); }
+
+/* ── Main Layout ─────────────────────────────────── */
+.container { max-width: 1600px; margin: 0 auto; padding: 2rem; }
+
+/* ── KPI Cards ───────────────────────────────────── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.kpi-card:hover { border-color: var(--border2); }
+.kpi-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+.kpi-card.accent::before { background: var(--accent); }
+.kpi-card.ok::before { background: var(--ok); }
+.kpi-card.warn::before { background: var(--warn); }
+.kpi-card.crit::before { background: var(--crit); }
+
+.kpi-label {
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-dim); margin-bottom: 0.5rem;
+}
+.kpi-value {
+  font-size: 2rem; font-weight: 800; line-height: 1;
+  font-family: var(--font-mono);
+}
+.kpi-value.money { font-size: 1.4rem; }
+
+/* ── Section header ──────────────────────────────── */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.section-title {
+  font-size: 0.8rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-dim);
+}
+
+/* ── Upload Zone ─────────────────────────────────── */
+.upload-zone {
+  background: var(--surface);
+  border: 2px dashed var(--border2);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+.upload-zone input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer;
+}
+.upload-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+.upload-title { font-size: 1rem; font-weight: 700; margin-bottom: 0.25rem; }
+.upload-hint { font-size: 0.8rem; color: var(--text-dim); }
+
+/* Progress bar */
+.progress-wrap {
+  display: none;
+  height: 4px; background: var(--border);
+  border-radius: 2px; margin-top: 1rem; overflow: hidden;
+}
+.progress-bar {
+  height: 100%; background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  width: 0%;
+}
+
+/* ── Import Report Panel ─────────────────────────── */
+.report-panel {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2rem;
+  display: none;
+}
+.report-panel.show { display: block; animation: slideIn 0.3s ease; }
+@keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
+
+.report-title {
+  font-size: 0.8rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 1rem;
+}
+.report-title.success { color: var(--ok); }
+.report-title.error { color: var(--crit); }
+
+.report-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem; margin-bottom: 1rem;
+}
+.report-stat { font-family: var(--font-mono); }
+.report-stat-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+.report-stat-val { font-size: 1.2rem; font-weight: 700; }
+
+.report-warnings { font-size: 0.78rem; color: var(--warn); }
+
+/* ── Filter Bar ──────────────────────────────────── */
+.filter-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.5rem;
+  display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.filter-group { display: flex; flex-direction: column; gap: 0.4rem; min-width: 160px; }
+.filter-label {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-dim);
+}
+
+select, input[type="text"] {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+select:focus, input[type="text"]:focus { border-color: var(--accent); }
+
+/* ── Buttons ─────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.5rem 1.1rem;
+  border-radius: 6px; border: none; cursor: pointer;
+  font-family: var(--font-ui); font-size: 0.82rem; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  text-decoration: none; transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { filter: brightness(1.2); }
+.btn-ghost {
+  background: transparent; color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+.btn-danger { background: var(--crit-bg); color: var(--crit); border: 1px solid var(--crit); }
+.btn-danger:hover { background: var(--crit); color: #fff; }
+.btn-sm { padding: 0.3rem 0.7rem; font-size: 0.75rem; }
+
+/* ── Table ───────────────────────────────────────── */
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: auto;
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+thead th {
+  background: var(--surface2);
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap; position: sticky; top: 0;
+}
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--surface2); }
+tbody td {
+  padding: 0.65rem 1rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+tbody td.patente {
+  font-weight: 700; color: var(--accent); font-size: 0.85rem;
+}
+
+/* ── Alert Badges ────────────────────────────────── */
+.badge {
+  display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px;
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; font-family: var(--font-ui);
+}
+.badge-ok { background: var(--ok-bg); color: var(--ok); }
+.badge-warn { background: var(--warn-bg); color: var(--warn); }
+.badge-crit { background: var(--crit-bg); color: var(--crit); }
+
+/* ── Toast notifications ─────────────────────────── */
+.toast-container {
+  position: fixed; bottom: 1.5rem; right: 1.5rem;
+  display: flex; flex-direction: column; gap: 0.5rem; z-index: 9999;
+}
+.toast {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.85rem 1.25rem;
+  font-size: 0.83rem; max-width: 360px;
+  animation: toastIn 0.3s ease;
+  display: flex; align-items: flex-start; gap: 0.6rem;
+}
+.toast.ok { border-color: var(--ok); }
+.toast.error { border-color: var(--crit); }
+.toast.warn { border-color: var(--warn); }
+@keyframes toastIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:none; } }
+
+/* ── Empty state ─────────────────────────────────── */
+.empty-state {
+  text-align: center; padding: 4rem 2rem;
+  color: var(--text-dim);
+}
+.empty-state .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.4; }
+.empty-state p { font-size: 0.9rem; }
+
+/* ── Responsive ──────────────────────────────────── */
+@media (max-width: 768px) {
+  header { padding: 0 1rem; }
+  nav { display: none; }
+  .container { padding: 1rem; }
+  .kpi-value { font-size: 1.5rem; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    ⬡ FlotaOps <span>/ Mantenimiento</span>
+  </div>
+  <nav>
+    <a href="/">Registros</a>
+    <a href="/dashboard">Dashboard IA</a>
+    <a href="/export">Exportar</a>
+    <a href="/registro">Nuevo</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card accent">
+      <div class="kpi-label">Total Registros (BD)</div>
+      <div class="kpi-value">{{ kpis.total }}</div>
+    </div>
+    <div class="kpi-card ok">
+      <div class="kpi-label">Vehículos Únicos</div>
+      <div class="kpi-value">{{ kpis.vehiculos }}</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">Costo Total</div>
+      <div class="kpi-value money">$ {{ "{:,.0f}".format(kpis.costo_total) }}</div>
+    </div>
+    <div class="kpi-card crit">
+      <div class="kpi-label">Alertas Críticas ¹</div>
+      <div class="kpi-value">{{ kpis.criticos }}</div>
+    </div>
+  </div>
+  <p style="font-size:0.68rem;color:var(--text-dim);margin-top:-1.25rem;margin-bottom:1.5rem">
+    ¹ Alertas críticas contadas sobre la página actual. Ver análisis completo en <a href="/dashboard" style="color:var(--accent)">Dashboard IA</a>.
+    &nbsp;·&nbsp; <a href="/db-status" style="color:var(--text-dim)" target="_blank">Estado de BD</a>
+  </p>
+
+  <!-- Upload Zone -->
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm">
+    <div class="upload-icon">📂</div>
+    <div class="upload-title">Importar Excel de mantenimiento</div>
+    <div class="upload-hint">Arrastrá el archivo o hacé clic · .xlsx, .xls, .xlsm · Máx 16MB</div>
+    <div class="upload-hint" style="margin-top:0.5rem;color:var(--accent)">Detección automática de header · Limpieza inteligente de datos</div>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+  </div>
+
+  <!-- Import Report -->
+  <div class="report-panel" id="reportPanel">
+    <div class="report-title" id="reportTitle"></div>
+    <div class="report-grid" id="reportGrid"></div>
+    <div class="report-warnings" id="reportWarnings"></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">Patente</span>
+      <input type="text" id="fPatente" placeholder="Buscar patente..." value="{{ filters.patente }}">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Taller</span>
+      <select id="fTaller">
+        <option value="">Todos los talleres</option>
+        {% for t in talleres %}
+        <option value="{{ t }}" {% if filters.taller == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Alerta IA</span>
+      <select id="fAlerta">
+        <option value="">Todas</option>
+        <option value="CRÍTICO" {% if filters.alerta == 'CRÍTICO' %}selected{% endif %}>🔴 Crítico</option>
+        <option value="MEDIO" {% if filters.alerta == 'MEDIO' %}selected{% endif %}>🟡 Medio</option>
+        <option value="OK" {% if filters.alerta == 'OK' %}selected{% endif %}>🟢 OK</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="applyFilters()">Filtrar</button>
+    <button class="btn btn-ghost" onclick="clearFilters()">✕ Limpiar</button>
+    <div style="margin-left:auto;display:flex;gap:0.5rem">
+      <a href="/export" class="btn btn-ghost" title="Exportar todos los {{ kpis.total }} registros a Excel">↓ Exportar Excel</a>
+      <a href="/registro" class="btn btn-primary">+ Nuevo Registro</a>
+    </div>
+  </div>
+
+  <!-- Table header + pagination info -->
+  <div class="section-header">
+    <span class="section-title">
+      Registros de Mantenimiento
+      <span style="color:var(--text-dim);font-weight:400;margin-left:0.5rem">
+        — mostrando {{ data|length }} de {{ pagination.total_filtered }} filtrados
+        ({{ kpis.total }} total en BD)
+      </span>
+    </span>
+    <div style="display:flex;gap:0.5rem;align-items:center">
+      {% if pagination.page > 1 %}
+      <a href="?{{ request.query_string.decode() | replace('page=' ~ pagination.page, 'page=' ~ (pagination.page - 1)) }}"
+         class="btn btn-ghost btn-sm">← Anterior</a>
+      {% endif %}
+      <span style="font-size:0.75rem;color:var(--text-dim);font-family:var(--font-mono)">
+        Pág {{ pagination.page }}/{{ pagination.total_pages }}
+      </span>
+      {% if pagination.page < pagination.total_pages %}
+      <a href="?{{ request.query_string.decode() | replace('page=' ~ pagination.page, 'page=' ~ (pagination.page + 1)) if 'page=' in request.query_string.decode() else (request.query_string.decode() + ('&' if request.query_string else '') + 'page=' ~ (pagination.page + 1)) }}"
+         class="btn btn-ghost btn-sm">Siguiente →</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    {% if data %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Patente</th>
+          <th>Fecha</th>
+          <th>Taller</th>
+          <th>Rubro</th>
+          <th>Detalle</th>
+          <th>Costo</th>
+          <th>Técnico</th>
+          <th>Estado IA</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in data %}
+        <tr id="row-{{ row.id }}">
+          <td style="color:var(--text-dim)">{{ row.id }}</td>
+          <td class="patente">{{ row.patente or '—' }}</td>
+          <td>{{ row.fecha or '—' }}</td>
+          <td>{{ row.taller or '—' }}</td>
+          <td>{{ row.rubro or '—' }}</td>
+          <td title="{{ row.detalle }}">{{ (row.detalle or '—')[:40] }}</td>
+          <td style="color:var(--warn)">$ {{ "{:,.0f}".format(row.costo|float) if row.costo else '—' }}</td>
+          <td>{{ row.tecnico or '—' }}</td>
+          <td>
+            {% if row.alerta_ia == 'CRÍTICO' %}
+              <span class="badge badge-crit">● Crítico</span>
+            {% elif row.alerta_ia == 'MEDIO' %}
+              <span class="badge badge-warn">◐ Medio</span>
+            {% else %}
+              <span class="badge badge-ok">○ OK</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:0.4rem">
+              <a href="/edit/{{ row.id }}" class="btn btn-ghost btn-sm">✏</a>
+              <button class="btn btn-danger btn-sm" onclick="deleteRow({{ row.id }})">✕</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <p>No hay registros. Importá un Excel o agregá uno manualmente.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ── File Upload ──────────────────────────────────────────
+const fileInput = document.getElementById('fileInput');
+const uploadZone = document.getElementById('uploadZone');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar = document.getElementById('progressBar');
+const reportPanel = document.getElementById('reportPanel');
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleUpload(file);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleUpload(fileInput.files[0]);
+});
+
+async function handleUpload(file) {
+  // Validación rápida del lado cliente
+  const allowed = ['.xlsx', '.xls', '.xlsm'];
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!allowed.includes(ext)) {
+    showToast('❌ Formato no válido. Usá .xlsx, .xls o .xlsm', 'error');
+    return;
+  }
+  if (file.size > 16 * 1024 * 1024) {
+    showToast('❌ El archivo supera el límite de 16MB', 'error');
+    return;
+  }
+
+  // UI de progreso
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+  reportPanel.classList.remove('show');
+  uploadZone.style.pointerEvents = 'none';
+
+  // Progreso simulado mientras se procesa
+  let prog = 0;
+  const interval = setInterval(() => {
+    prog = Math.min(prog + Math.random() * 12, 85);
+    progressBar.style.width = prog + '%';
+  }, 200);
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch('/import', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    clearInterval(interval);
+    progressBar.style.width = '100%';
+
+    setTimeout(() => {
+      progressWrap.style.display = 'none';
+      progressBar.style.width = '0%';
+      uploadZone.style.pointerEvents = '';
+      showImportReport(data);
+      if (data.success) {
+        showToast(data.message, 'ok');
+        setTimeout(() => location.reload(), 1800);
+      } else {
+        showToast('❌ ' + data.error, 'error');
+      }
+    }, 400);
+
+  } catch (err) {
+    clearInterval(interval);
+    progressWrap.style.display = 'none';
+    uploadZone.style.pointerEvents = '';
+    showToast('❌ Error de conexión: ' + err.message, 'error');
+  }
+}
+
+function showImportReport(data) {
+  const panel = document.getElementById('reportPanel');
+  const title = document.getElementById('reportTitle');
+  const grid = document.getElementById('reportGrid');
+  const warns = document.getElementById('reportWarnings');
+
+  if (data.success) {
+    title.textContent = '✅ Importación exitosa';
+    title.className = 'report-title success';
+    const r = data.report;
+    grid.innerHTML = `
+      <div class="report-stat">
+        <div class="report-stat-label">Fila de Header</div>
+        <div class="report-stat-val">#${r.header_encontrado_en_fila}</div>
+      </div>
+      <div class="report-stat">
+        <div class="report-stat-label">Filas Importadas</div>
+        <div class="report-stat-val">${r.filas_importadas}</div>
+      </div>
+      <div class="report-stat">
+        <div class="report-stat-label">Filas Ignoradas</div>
+        <div class="report-stat-val">${r.filas_ignoradas}</div>
+      </div>
+      <div class="report-stat">
+        <div class="report-stat-label">Columnas Nuevas</div>
+        <div class="report-stat-val">${r.columnas_desconocidas.length}</div>
+      </div>
+    `;
+    if (r.advertencias.length > 0) {
+      warns.innerHTML = '⚠ ' + r.advertencias.join(' · ');
+    }
+  } else {
+    title.textContent = '❌ Error en importación';
+    title.className = 'report-title error';
+    grid.innerHTML = `<p style="color:var(--text);font-size:0.85rem">${data.error}</p>`;
+    warns.innerHTML = '';
+  }
+
+  panel.classList.add('show');
+}
+
+// ── Delete Row ───────────────────────────────────────────
+async function deleteRow(id) {
+  if (!confirm(`¿Eliminar registro #${id}?`)) return;
+  try {
+    const res = await fetch(`/delete/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById(`row-${id}`)?.remove();
+      showToast(`Registro #${id} eliminado`, 'ok');
+    } else {
+      showToast('❌ ' + data.error, 'error');
+    }
+  } catch (e) {
+    showToast('❌ Error de conexión', 'error');
+  }
+}
+
+// ── Filters ──────────────────────────────────────────────
+function applyFilters() {
+  const p = document.getElementById('fPatente').value;
+  const t = document.getElementById('fTaller').value;
+  const a = document.getElementById('fAlerta').value;
+  const params = new URLSearchParams();
+  if (p) params.set('patente', p);
+  if (t) params.set('taller', t);
+  if (a) params.set('alerta', a);
+  window.location.href = '/?' + params.toString();
+}
+function clearFilters() { window.location.href = '/'; }
+document.getElementById('fPatente')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') applyFilters();
+});
+
+// ── Toast ────────────────────────────────────────────────
+function showToast(msg, type = 'ok') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = msg;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 5000);
+}
+</script>
+</body>
+</html>

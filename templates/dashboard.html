@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlotaOps — Dashboard IA</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0d12;--surface:#111520;--surface2:#161c2a;--border:#1e2a3a;--border2:#263244;
+  --text:#d4dde8;--text-dim:#637080;--accent:#1a8fa0;--accent-glow:#1a8fa033;
+  --ok:#2ecc87;--ok-bg:#2ecc8715;--warn:#f0a034;--warn-bg:#f0a03415;
+  --crit:#c0392b;--crit-bg:#c0392b18;
+  --font-ui:'Syne',sans-serif;--font-mono:'JetBrains Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-height:100vh}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--surface)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+ 
+header{display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.logo{font-size:1.1rem;font-weight:800;letter-spacing:0.04em;color:var(--accent);display:flex;align-items:center;gap:0.5rem}
+.logo span{color:var(--text);font-weight:400}
+nav{display:flex;gap:1.5rem}
+nav a{color:var(--text-dim);text-decoration:none;font-size:0.85rem;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;padding:0.25rem 0;border-bottom:2px solid transparent;transition:all 0.2s}
+nav a:hover,nav a.active{color:var(--text);border-color:var(--accent)}
+ 
+.container{max-width:1400px;margin:0 auto;padding:2rem}
+ 
+.page-title{font-size:1.6rem;font-weight:800;margin-bottom:0.25rem}
+.page-subtitle{font-size:0.85rem;color:var(--text-dim);margin-bottom:2rem}
+ 
+/* KPI Grid */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:2rem}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;position:relative;overflow:hidden}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi-card.c1::before{background:var(--accent)}
+.kpi-card.c2::before{background:var(--ok)}
+.kpi-card.c3::before{background:var(--warn)}
+.kpi-card.c4::before{background:var(--crit)}
+.kpi-card.c5::before{background:#9b59b6}
+.kpi-card.c6::before{background:#3498db}
+.kpi-label{font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:0.5rem}
+.kpi-value{font-size:1.8rem;font-weight:800;font-family:var(--font-mono);line-height:1}
+.kpi-value.sm{font-size:1.2rem}
+ 
+/* Two-column layout */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem}
+@media(max-width:900px){.two-col{grid-template-columns:1fr}}
+ 
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem}
+.panel-title{font-size:0.72rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-dim);margin-bottom:1.25rem;display:flex;align-items:center;gap:0.5rem}
+ 
+/* Ranking bars */
+.rank-item{margin-bottom:1rem}
+.rank-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem}
+.rank-name{font-size:0.82rem;font-weight:600}
+.rank-val{font-family:var(--font-mono);font-size:0.78rem;color:var(--text-dim)}
+.rank-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.rank-fill{height:100%;background:var(--accent);border-radius:3px;transition:width 0.6s ease}
+.rank-fill.warn{background:var(--warn)}
+.rank-fill.crit{background:var(--crit)}
+.rank-fill.ok{background:var(--ok)}
+ 
+/* Problematic vehicles table */
+table{width:100%;border-collapse:collapse;font-size:0.8rem}
+thead th{background:var(--surface2);padding:0.6rem 0.8rem;text-align:left;font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:background 0.15s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+tbody td{padding:0.55rem 0.8rem;font-family:var(--font-mono);font-size:0.75rem}
+ 
+.badge{display:inline-block;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.65rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;font-family:var(--font-ui)}
+.badge-crit{background:var(--crit-bg);color:var(--crit)}
+.badge-warn{background:var(--warn-bg);color:var(--warn)}
+.badge-ok{background:var(--ok-bg);color:var(--ok)}
+ 
+/* Anomalies */
+.anomaly-item{padding:0.75rem;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--crit);border-radius:6px;margin-bottom:0.5rem}
+.anomaly-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem}
+.anomaly-patente{font-weight:700;color:var(--accent);font-size:0.85rem}
+.anomaly-costo{font-family:var(--font-mono);color:var(--crit);font-weight:700}
+.anomaly-detail{font-size:0.75rem;color:var(--text-dim)}
+ 
+.empty-note{color:var(--text-dim);font-size:0.82rem;text-align:center;padding:2rem}
+ 
+a.btn{display:inline-flex;align-items:center;gap:0.4rem;padding:0.5rem 1.1rem;border-radius:6px;border:none;cursor:pointer;font-family:var(--font-ui);font-size:0.82rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;text-decoration:none;transition:all 0.2s;background:transparent;color:var(--text-dim);border:1px solid var(--border)}
+a.btn:hover{border-color:var(--accent);color:var(--text)}
+</style>
+</head>
+<body>
+ 
+<header>
+  <div class="logo">⬡ FlotaOps <span>/ Dashboard IA</span></div>
+  <nav>
+    <a href="/">Registros</a>
+    <a href="/dashboard" class="active">Dashboard IA</a>
+    <a href="/export">Exportar</a>
+    <a href="/registro">Nuevo</a>
+  </nav>
+</header>
+ 
+<div class="container">
+ 
+  <h1 class="page-title">Inteligencia de Flota</h1>
+  <p class="page-subtitle">Análisis automático · Detección de anomalías · Ranking de talleres</p>
+ 
+  {% if analysis.error is defined %}
+  <div style="text-align:center;padding:4rem;color:var(--text-dim)">
+    <p style="font-size:1.2rem">Sin datos disponibles. Importá un Excel primero.</p>
+    <a href="/" style="color:var(--accent)">← Ir al inicio</a>
+  </div>
+  {% else %}
+ 
+  {% set kpis = analysis.kpis %}
+ 
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card c1">
+      <div class="kpi-label">Total Registros</div>
+      <div class="kpi-value">{{ kpis.total_registros }}</div>
+    </div>
+    <div class="kpi-card c2">
+      <div class="kpi-label">Vehículos</div>
+      <div class="kpi-value">{{ kpis.vehiculos_activos }}</div>
+    </div>
+    <div class="kpi-card c3">
+      <div class="kpi-label">Costo Total</div>
+      <div class="kpi-value sm">$ {{ "{:,.0f}".format(kpis.costo_total) }}</div>
+    </div>
+    <div class="kpi-card c3">
+      <div class="kpi-label">Costo Promedio</div>
+      <div class="kpi-value sm">$ {{ "{:,.0f}".format(kpis.costo_promedio) }}</div>
+    </div>
+    <div class="kpi-card c5">
+      <div class="kpi-label">Talleres</div>
+      <div class="kpi-value">{{ kpis.talleres_activos }}</div>
+    </div>
+    <div class="kpi-card c4">
+      <div class="kpi-label">Alertas Críticas</div>
+      <div class="kpi-value">{{ kpis.alertas_criticas }}</div>
+    </div>
+  </div>
+ 
+  <!-- Problematic vehicles + Workshop ranking -->
+  <div class="two-col">
+ 
+    <!-- Vehículos problemáticos -->
+    <div class="panel">
+      <div class="panel-title">🚨 Vehículos de Alto Riesgo</div>
+      {% if analysis.problematic_vehicles %}
+      <table>
+        <thead>
+          <tr>
+            <th>Patente</th>
+            <th>Intervenciones</th>
+            <th>Costo Total</th>
+            <th>Críticos</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in analysis.problematic_vehicles %}
+          <tr>
+            <td style="color:var(--accent);font-weight:700">{{ v.patente }}</td>
+            <td>{{ v.intervenciones }}</td>
+            <td style="color:var(--warn)">$ {{ "{:,.0f}".format(v.costo_total) }}</td>
+            <td>
+              {% if v.alertas_criticas > 0 %}
+              <span class="badge badge-crit">{{ v.alertas_criticas }}</span>
+              {% else %}
+              <span style="color:var(--text-dim)">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if v.score_riesgo > 1000 %}
+              <span class="badge badge-crit">{{ v.score_riesgo }}</span>
+              {% elif v.score_riesgo > 300 %}
+              <span class="badge badge-warn">{{ v.score_riesgo }}</span>
+              {% else %}
+              <span class="badge badge-ok">{{ v.score_riesgo }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty-note">Sin datos suficientes</p>
+      {% endif %}
+    </div>
+ 
+    <!-- Ranking talleres -->
+    <div class="panel">
+      <div class="panel-title">🏭 Ranking de Talleres por Costo</div>
+      {% if analysis.workshop_ranking %}
+        {% set max_cost = analysis.workshop_ranking[0].costo_total %}
+        {% for w in analysis.workshop_ranking[:8] %}
+        <div class="rank-item">
+          <div class="rank-header">
+            <span class="rank-name">{{ w.taller[:30] }}</span>
+            <span class="rank-val">$ {{ "{:,.0f}".format(w.costo_total) }} · {{ w.ordenes }} OT</span>
+          </div>
+          <div class="rank-bar">
+            <div class="rank-fill {% if loop.index == 1 %}crit{% elif loop.index <= 3 %}warn{% else %}ok{% endif %}"
+                 style="width:{{ (w.costo_total / max_cost * 100)|round }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <p class="empty-note">Sin datos de talleres</p>
+      {% endif %}
+    </div>
+ 
+  </div>
+ 
+  <!-- Anomalías + Top Rubros -->
+  <div class="two-col">
+ 
+    <!-- Anomalías de costo -->
+    <div class="panel">
+      <div class="panel-title">⚠ Anomalías de Costo (Z-score ≥ 2σ)</div>
+      {% if analysis.cost_anomalies %}
+        {% for a in analysis.cost_anomalies[:6] %}
+        <div class="anomaly-item">
+          <div class="anomaly-header">
+            <span class="anomaly-patente">{{ a.patente }}</span>
+            <span class="anomaly-costo">$ {{ "{:,.0f}".format(a.costo) }}</span>
+          </div>
+          <div class="anomaly-detail">
+            Z={{ a.z_score }} · {{ a.taller or '—' }} · {{ a.fecha or '—' }}
+            {% if a.detalle %} · {{ a.detalle[:50] }}{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <p class="empty-note">No se detectaron anomalías significativas</p>
+      {% endif %}
+    </div>
+ 
+    <!-- Top rubros -->
+    <div class="panel">
+      <div class="panel-title">📊 Top Rubros por Costo</div>
+      {% if analysis.top_rubros %}
+        {% set max_r = analysis.top_rubros[0].costo %}
+        {% for r in analysis.top_rubros %}
+        <div class="rank-item">
+          <div class="rank-header">
+            <span class="rank-name">{{ r.rubro[:35] }}</span>
+            <span class="rank-val">$ {{ "{:,.0f}".format(r.costo) }}</span>
+          </div>
+          <div class="rank-bar">
+            <div class="rank-fill" style="width:{{ (r.costo / max_r * 100)|round if max_r > 0 else 0 }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <p class="empty-note">Sin datos de rubros</p>
+      {% endif %}
+    </div>
+ 
+  </div>
+ 
+  {% endif %}
+ 
+</div>
+</body>
+</html>
+ 

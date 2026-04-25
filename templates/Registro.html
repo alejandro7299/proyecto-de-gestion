@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlotaOps — Nuevo Registro</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0d12;--surface:#111520;--surface2:#161c2a;--border:#1e2a3a;--border2:#263244;
+  --text:#d4dde8;--text-dim:#637080;--accent:#1a8fa0;
+  --ok:#2ecc87;--warn:#f0a034;--crit:#c0392b;
+  --font-ui:'Syne',sans-serif;--font-mono:'JetBrains Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.logo{font-size:1.1rem;font-weight:800;letter-spacing:0.04em;color:var(--accent)}
+.logo span{color:var(--text);font-weight:400}
+nav{display:flex;gap:1.5rem}
+nav a{color:var(--text-dim);text-decoration:none;font-size:0.85rem;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;padding:0.25rem 0;border-bottom:2px solid transparent;transition:all 0.2s}
+nav a:hover,nav a.active{color:var(--text);border-color:var(--accent)}
+
+.container{max-width:900px;margin:0 auto;padding:2rem}
+h1{font-size:1.4rem;font-weight:800;margin-bottom:0.25rem}
+.subtitle{font-size:0.85rem;color:var(--text-dim);margin-bottom:2rem}
+
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:2rem}
+.form-section{margin-bottom:2rem}
+.form-section-title{font-size:0.68rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem}
+.form-group{display:flex;flex-direction:column;gap:0.4rem}
+.form-group.full{grid-column:1/-1}
+label{font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim)}
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:0.55rem 0.75rem;font-family:var(--font-ui);font-size:0.85rem;outline:none;transition:border-color 0.2s;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:80px}
+.form-actions{display:flex;gap:1rem;margin-top:1.5rem;justify-content:flex-end}
+.btn{display:inline-flex;align-items:center;gap:0.4rem;padding:0.6rem 1.3rem;border-radius:6px;border:none;cursor:pointer;font-family:var(--font-ui);font-size:0.82rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;text-decoration:none;transition:all 0.2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{filter:brightness(1.2)}
+.btn-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--text)}
+
+/* Flash messages */
+.flash{padding:0.75rem 1rem;border-radius:6px;margin-bottom:1rem;font-size:0.85rem}
+.flash.success{background:#2ecc8715;border:1px solid var(--ok);color:var(--ok)}
+.flash.danger{background:#c0392b18;border:1px solid var(--crit);color:var(--crit)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">⬡ FlotaOps <span>/ Nuevo Registro</span></div>
+  <nav>
+    <a href="/">Registros</a>
+    <a href="/dashboard">Dashboard IA</a>
+    <a href="/registro" class="active">Nuevo</a>
+  </nav>
+</header>
+
+<div class="container">
+  <h1>Nuevo Registro de Mantenimiento</h1>
+  <p class="subtitle">Completá los datos del servicio. Los campos marcados son obligatorios.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form class="form-card" method="POST" action="/registro">
+
+    <div class="form-section">
+      <div class="form-section-title">Identificación del Vehículo</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Patente *</label>
+          <input type="text" name="patente" required placeholder="Ej: ABC123" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>Marca</label>
+          <input type="text" name="marca" placeholder="Ej: Ford">
+        </div>
+        <div class="form-group">
+          <label>Modelo</label>
+          <input type="text" name="modelo" placeholder="Ej: Transit">
+        </div>
+        <div class="form-group">
+          <label>Operador</label>
+          <input type="text" name="operador" placeholder="Nombre del operador">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Orden de Trabajo</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>N° OT</label>
+          <input type="text" name="n_ot" placeholder="Número de orden">
+        </div>
+        <div class="form-group">
+          <label>Comprobante</label>
+          <input type="text" name="comprobante" placeholder="N° comprobante">
+        </div>
+        <div class="form-group">
+          <label>Fecha</label>
+          <input type="date" name="fecha">
+        </div>
+        <div class="form-group">
+          <label>Mes</label>
+          <input type="text" name="mes" placeholder="Ej: Enero 2024">
+        </div>
+        <div class="form-group">
+          <label>Inicio OT</label>
+          <input type="date" name="inicio_ot">
+        </div>
+        <div class="form-group">
+          <label>Fin OT</label>
+          <input type="date" name="fin_ot">
+        </div>
+        <div class="form-group">
+          <label>Técnico</label>
+          <input type="text" name="tecnico" placeholder="Nombre del técnico">
+        </div>
+        <div class="form-group">
+          <label>Cumplida</label>
+          <select name="cumplida">
+            <option value="">— Seleccioná —</option>
+            <option value="SI">Sí</option>
+            <option value="NO">No</option>
+            <option value="PARCIAL">Parcial</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Taller y Costo</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Taller</label>
+          <input type="text" name="taller" placeholder="Nombre del taller">
+        </div>
+        <div class="form-group">
+          <label>Empresa</label>
+          <input type="text" name="empresa" placeholder="Empresa">
+        </div>
+        <div class="form-group">
+          <label>Fletero</label>
+          <input type="text" name="fletero" placeholder="Fletero">
+        </div>
+        <div class="form-group">
+          <label>Centro de Costo</label>
+          <input type="text" name="centrocosto" placeholder="Centro de costo">
+        </div>
+        <div class="form-group">
+          <label>Cantidad</label>
+          <input type="number" name="cantidad" step="0.01" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>Precio Unitario ($)</label>
+          <input type="number" name="precio_unit" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Costo Total ($)</label>
+          <input type="number" name="costo" step="0.01" placeholder="0.00" id="costoTotal">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="form-section-title">Clasificación del Servicio</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Rubro</label>
+          <input type="text" name="rubro" placeholder="Ej: MANTENIMIENTO">
+        </div>
+        <div class="form-group">
+          <label>Subrubro</label>
+          <input type="text" name="subrubro" placeholder="Subrubro">
+        </div>
+        <div class="form-group">
+          <label>Insumo</label>
+          <input type="text" name="insumo" placeholder="Código de insumo">
+        </div>
+        <div class="form-group">
+          <label>Nombre Insumo</label>
+          <input type="text" name="nominsumo" placeholder="Descripción">
+        </div>
+        <div class="form-group">
+          <label>Pañol</label>
+          <input type="text" name="panol" placeholder="Pañol">
+        </div>
+        <div class="form-group">
+          <label>Operación</label>
+          <input type="text" name="operacion" placeholder="Tipo de operación">
+        </div>
+        <div class="form-group full">
+          <label>Detalle</label>
+          <textarea name="detalle" placeholder="Descripción detallada del servicio realizado..."></textarea>
+        </div>
+        <div class="form-group full">
+          <label>Acción</label>
+          <textarea name="accion" placeholder="Acción tomada..."></textarea>
+        </div>
+        <div class="form-group full">
+          <label>Observación</label>
+          <textarea name="observacion" placeholder="Observaciones adicionales..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a href="/" class="btn btn-ghost">← Cancelar</a>
+      <button type="submit" class="btn btn-primary">Guardar Registro</button>
+    </div>
+
+  </form>
+</div>
+
+<script>
+// Auto-calcular costo si se llenan cantidad y precio
+const cantidad = document.querySelector('[name="cantidad"]');
+const precio = document.querySelector('[name="precio_unit"]');
+const costo = document.querySelector('[name="costo"]');
+
+function calcCosto() {
+  const q = parseFloat(cantidad.value) || 0;
+  const p = parseFloat(precio.value) || 0;
+  if (q > 0 && p > 0 && !costo.value) {
+    costo.value = (q * p).toFixed(2);
+  }
+}
+cantidad.addEventListener('blur', calcCosto);
+precio.addEventListener('blur', calcCosto);
+
+// Patente uppercase automático
+document.querySelector('[name="patente"]').addEventListener('input', function() {
+  this.value = this.value.toUpperCase();
+});
+</script>
+</body>
+</html>
