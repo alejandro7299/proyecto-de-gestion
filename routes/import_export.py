@@ -1,14 +1,49 @@
 from flask import Blueprint, request, flash, redirect, url_for, jsonify, send_file
-from db import get_db
+from db import get_db, USE_SQLITE
 from services.importer import load_excel_robust, insert_dataframe
 import pandas as pd
 from io import BytesIO
 import traceback
 import logging
-import os
+from datetime import datetime
  
 logger = logging.getLogger(__name__)
 import_export_bp = Blueprint("import_export", __name__)
+ 
+DB_LABEL = "SQLite local" if USE_SQLITE else "PostgreSQL"
+ 
+ 
+def _fetchone_count(conn):
+    """Obtiene COUNT(*) compatible con SQLite y PostgreSQL."""
+    row = conn.execute("SELECT COUNT(*) FROM flota").fetchone()
+    # SQLite retorna Row indexable, PostgreSQL retorna RealDictRow
+    if isinstance(row, dict):
+        return list(row.values())[0]
+    return row[0]
+ 
+ 
+def _fetch_chunks(conn, count, chunk=2000):
+    """Lee la tabla en chunks para no reventar memoria."""
+    chunks = []
+    if USE_SQLITE:
+        for offset in range(0, count, chunk):
+            rows = conn.execute(
+                "SELECT * FROM flota ORDER BY id ASC LIMIT ? OFFSET ?",
+                (chunk, offset)
+            ).fetchall()
+            chunks.append(pd.DataFrame([dict(r) for r in rows]))
+    else:
+        # PostgreSQL usa %s como placeholder
+        for offset in range(0, count, chunk):
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT * FROM flota ORDER BY id ASC LIMIT %s OFFSET %s",
+                (chunk, offset)
+            )
+            rows = cur.fetchall()
+            cur.close()
+            chunks.append(pd.DataFrame(rows))
+    return chunks
  
  
 @import_export_bp.route("/import", methods=["POST"])
@@ -46,7 +81,7 @@ def import_excel():
         finally:
             conn.close()
  
-        logger.info(f"Import OK: {rows_inserted} filas insertadas en {DB_PATH}")
+        logger.info(f"Import OK: {rows_inserted} filas insertadas en {DB_LABEL}")
  
         return jsonify({
             "success": True,
@@ -55,10 +90,9 @@ def import_excel():
                 "header_encontrado_en_fila": report["header_row"],
                 "filas_importadas": report["rows_imported"],
                 "filas_ignoradas": report["rows_skipped"],
-                "columnas_mapeadas": report["columns_mapped"],
                 "columnas_desconocidas": report["columns_unknown"],
                 "advertencias": report["warnings"],
-                "db_path": DB_PATH,  # visible en respuesta para debug
+                "db": DB_LABEL,
             }
         })
  
@@ -74,47 +108,27 @@ def import_excel():
  
 @import_export_bp.route("/export")
 def export_excel():
-    """
-    Exporta TODOS los registros a Excel.
-    
-    BUG ORIGINAL: Si get_db() resolvía a un archivo diferente al que tiene
-    los datos, devolvía 0-2 filas (las del schema vacío o una importación previa).
-    Ahora logueamos el path y el count antes de exportar para diagnóstico.
-    """
+    """Exporta TODOS los registros a Excel en chunks para soportar 14k+ filas."""
     conn = get_db()
     try:
-        # Diagnóstico: loguear path y cantidad ANTES de leer
-        count = conn.execute("SELECT COUNT(*) FROM flota").fetchone()[0]
-        logger.info(f"Export: {count} registros en {DB_PATH}")
-        print(f"[EXPORT] DB: {DB_PATH} | Registros: {count}")
+        count = _fetchone_count(conn)
+        print(f"[EXPORT] {DB_LABEL} | Registros: {count}")
  
         if count == 0:
-            flash(f"La base de datos está vacía. (DB: {DB_PATH})", "warning")
+            flash("La base de datos está vacía.", "warning")
             return redirect(url_for("main.index"))
  
-        # Leer en chunks para no reventar memoria con 14k+ filas
-        CHUNK = 5000
-        chunks = []
-        for offset in range(0, count, CHUNK):
-            rows = conn.execute(
-                "SELECT * FROM flota ORDER BY id ASC LIMIT ? OFFSET ?",
-                (CHUNK, offset)
-            ).fetchall()
-            chunks.append(pd.DataFrame([dict(r) for r in rows]))
- 
-        df = pd.concat(chunks, ignore_index=True)
+        chunks = _fetch_chunks(conn, count)
+        df = pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
  
     finally:
         conn.close()
  
-    logger.info(f"Export: DataFrame construido con {len(df)} filas, {len(df.columns)} columnas")
-    print(f"[EXPORT] DataFrame: {len(df)} filas")
+    print(f"[EXPORT] DataFrame: {len(df)} filas x {len(df.columns)} columnas")
  
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Flota")
- 
-        # Auto-ajustar anchos (rápido)
         ws = writer.sheets["Flota"]
         for col_cells in ws.columns:
             max_len = max(
@@ -124,8 +138,6 @@ def export_excel():
             ws.column_dimensions[col_cells[0].column_letter].width = min(max_len + 2, 40)
  
     output.seek(0)
- 
-    from datetime import datetime
     filename = f"flota_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
  
     response = send_file(
@@ -134,32 +146,32 @@ def export_excel():
         as_attachment=True,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    # Header de debug — visible en DevTools
     response.headers["X-Rows-Exported"] = str(len(df))
-    response.headers["X-DB-Path"] = DB_PATH
+    response.headers["X-DB"] = DB_LABEL
     return response
  
  
 @import_export_bp.route("/db-status")
 def db_status():
-    """
-    Endpoint de diagnóstico — muestra estado real de la BD.
-    Acceder a /db-status para ver si los datos están donde deben estar.
-    """
+    """Diagnóstico — muestra estado real de la BD. Visitá /db-status para verificar."""
     conn = get_db()
     try:
-        count = conn.execute("SELECT COUNT(*) FROM flota").fetchone()[0]
-        sample = conn.execute(
-            "SELECT id, patente, fecha, costo FROM flota ORDER BY id DESC LIMIT 5"
-        ).fetchall()
-        db_size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
+        count = _fetchone_count(conn)
+ 
+        if USE_SQLITE:
+            rows = conn.execute(
+                "SELECT id, patente, fecha, costo FROM flota ORDER BY id DESC LIMIT 5"
+            ).fetchall()
+        else:
+            cur = conn.cursor()
+            cur.execute("SELECT id, patente, fecha, costo FROM flota ORDER BY id DESC LIMIT 5")
+            rows = cur.fetchall()
+            cur.close()
  
         return jsonify({
-            "db_path": DB_PATH,
-            "db_exists": os.path.exists(DB_PATH),
-            "db_size_mb": round(db_size / 1024 / 1024, 2),
+            "db": DB_LABEL,
             "total_rows": count,
-            "last_5_rows": [dict(r) for r in sample],
+            "last_5_rows": [dict(r) for r in rows],
         })
     finally:
         conn.close()
