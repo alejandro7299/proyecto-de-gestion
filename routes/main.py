@@ -1,42 +1,51 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from db import get_db
+from flask import Blueprint, render_template, request, jsonify
+from db import get_db, USE_SQLITE
 from services.ai_engine import classify_alert
 
 main_bp = Blueprint("main", __name__)
 
-PAGE_SIZE = 200  # Rows shown in table — intentionally limited for browser perf
+PAGE_SIZE = 200
+
+
+def _execute(conn, sql, params=None):
+    """Ejecuta una query compatible con SQLite (?), y PostgreSQL (%s)."""
+    if not USE_SQLITE:
+        sql = sql.replace("?", "%s")
+    cur = conn.cursor()
+    cur.execute(sql, params or [])
+    return cur
 
 
 @main_bp.route("/")
 def index():
     conn = get_db()
     try:
-        # ── Filtros ──────────────────────────────────────────────────────────
         patente = request.args.get("patente", "").strip()
         taller  = request.args.get("taller",  "").strip()
         alerta  = request.args.get("alerta",  "").strip()
         page    = max(1, int(request.args.get("page", 1)))
 
-        # ── KPIs reales sobre TODA la tabla (sin LIMIT) ─────────────────────
-        # Bug original: los KPIs se calculaban sobre los 500 registros del LIMIT.
-        kpi_row = conn.execute("""
+        # ── KPIs sobre toda la tabla ─────────────────────────────────────────
+        cur = _execute(conn, """
             SELECT
-                COUNT(*)                          AS total,
-                COALESCE(SUM(costo), 0)           AS costo_total,
-                COUNT(DISTINCT patente)           AS vehiculos,
-                COUNT(DISTINCT taller)            AS talleres
+                COUNT(*)                 AS total,
+                COALESCE(SUM(costo), 0)  AS costo_total,
+                COUNT(DISTINCT patente)  AS vehiculos,
+                COUNT(DISTINCT taller)   AS talleres
             FROM flota
-            WHERE patente != 'SIN SELECCIONAR' OR patente IS NULL
-        """).fetchone()
+        """)
+        kpi_row = cur.fetchone()
+        cur.close()
 
+        # psycopg2 RealDictRow o sqlite3.Row — ambos soportan acceso por clave
         kpis = {
             "total":       kpi_row["total"],
-            "costo_total": kpi_row["costo_total"],
+            "costo_total": float(kpi_row["costo_total"] or 0),
             "vehiculos":   kpi_row["vehiculos"],
             "talleres":    kpi_row["talleres"],
         }
 
-        # ── Query paginada con filtros ────────────────────────────────────────
+        # ── Filtros ──────────────────────────────────────────────────────────
         where_parts = ["1=1"]
         params = []
 
@@ -50,43 +59,45 @@ def index():
         where_clause = " AND ".join(where_parts)
         offset = (page - 1) * PAGE_SIZE
 
-        # Count total filtered rows (for pagination)
-        count_row = conn.execute(
-            f"SELECT COUNT(*) AS n FROM flota WHERE {where_clause}", params
-        ).fetchone()
+        cur = _execute(conn, f"SELECT COUNT(*) AS n FROM flota WHERE {where_clause}", params)
+        count_row = cur.fetchone()
+        cur.close()
         total_filtered = count_row["n"]
         total_pages = max(1, (total_filtered + PAGE_SIZE - 1) // PAGE_SIZE)
 
-        rows = conn.execute(
+        cur = _execute(conn,
             f"SELECT * FROM flota WHERE {where_clause} ORDER BY id DESC LIMIT ? OFFSET ?",
             params + [PAGE_SIZE, offset]
-        ).fetchall()
-        data = [dict(r) for r in rows]
+        )
+        data = [dict(r) for r in cur.fetchall()]
+        cur.close()
 
-        # ── Clasificación IA (solo sobre los registros visibles) ─────────────
+        # ── Clasificación IA ─────────────────────────────────────────────────
         for row in data:
             row["alerta_ia"] = classify_alert(row)
 
-        # Filtro por alerta IA — nota: aplica solo sobre la página actual.
-        # Para filtrar TODA la DB por IA, usar el endpoint /api/analysis.
         if alerta:
             data = [r for r in data if r["alerta_ia"] == alerta]
 
-        # Contar críticos reales en página actual
         criticos = sum(1 for r in data if r["alerta_ia"] == "CRÍTICO")
-        kpis["criticos"] = criticos  # aproximado — exacto en dashboard IA
+        kpis["criticos"] = criticos
 
         # ── Opciones de filtros ───────────────────────────────────────────────
-        patentes = conn.execute(
+        cur = _execute(conn,
             "SELECT DISTINCT patente FROM flota "
             "WHERE patente != 'SIN SELECCIONAR' AND patente IS NOT NULL "
             "ORDER BY patente LIMIT 500"
-        ).fetchall()
-        talleres = conn.execute(
+        )
+        patentes = [r["patente"] for r in cur.fetchall()]
+        cur.close()
+
+        cur = _execute(conn,
             "SELECT DISTINCT taller FROM flota "
             "WHERE taller != 'SIN SELECCIONAR' AND taller IS NOT NULL "
             "ORDER BY taller LIMIT 200"
-        ).fetchall()
+        )
+        talleres = [r["taller"] for r in cur.fetchall()]
+        cur.close()
 
     finally:
         conn.close()
@@ -95,8 +106,8 @@ def index():
         "index.html",
         data=data,
         kpis=kpis,
-        patentes=[r[0] for r in patentes],
-        talleres=[r[0] for r in talleres],
+        patentes=patentes,
+        talleres=talleres,
         filters={"patente": patente, "taller": taller, "alerta": alerta},
         pagination={
             "page": page,
